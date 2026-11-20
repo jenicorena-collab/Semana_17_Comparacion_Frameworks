@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Semana 17 | Comparación de frameworks</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">UPED · Integración de Sistemas · CE-ISC019</p>
+    <h1>Comparación de frameworks de back-end</h1>
+    <p>Laboratorio práctico — Semana 17</p>
+    <nav><a href="#endpoint">Endpoint</a><a href="#equivalencias">Equivalencias</a><a href="#matriz">Matriz</a><a href="#escenarios">Escenarios</a><a href="#anexo">Anexo A</a></nav>
+  </div>
+</header>
+<main class="wrap">
+<section class="notice"><b>Objetivo:</b> comparar opciones tecnológicas y justificar una decisión según las necesidades del proyecto. Los puntajes son una propuesta académica editable, no mediciones universales.</section>
+<section id="endpoint" class="panel">
+<h2>1. El mismo endpoint en otros frameworks</h2>
+<p>Los tres fragmentos registran una transacción para un comercio que pertenece al usuario autenticado.</p>
+<div class="grid three">
+<article><h3>Spring Boot · Java</h3><pre>@PostMapping("/api/transacciones")
+public ResponseEntity&lt;TransaccionDto&gt; store(
+ @Valid @RequestBody NuevaTransaccion datos,
+ Principal usuario) {
+ Transaccion t = servicio.registrar(usuario.getName(), datos);
+ return ResponseEntity.status(201).body(TransaccionDto.de(t));
+}</pre></article>
+<article><h3>Django REST · Python</h3><pre>class TransaccionViewSet(viewsets.ModelViewSet):
+ serializer_class = TransaccionSerializer
+ permission_classes = [IsAuthenticated]
+
+ def perform_create(self, serializer):
+  comercio = get_object_or_404(
+   Comercio, pk=self.request.data['comercio_id'],
+   usuario=self.request.user)
+  serializer.save(comercio=comercio, estado='Iniciada')</pre></article>
+<article><h3>Express · JavaScript</h3><pre>router.post('/transacciones', auth,
+ validar(esquemaTransaccion), async (req,res) =&gt; {
+ const comercio = await prisma.comercio.findFirst({
+  where:{id:req.body.comercio_id, usuarioId:req.user.id}
+ });
+ if(!comercio) return res.status(404).json({message:'No encontrado'});
+ const t = await prisma.transaccion.create({
+  data:{...req.body, estado:'Iniciada'}
+ });
+ res.status(201).json({data:t});
+});</pre></article>
+</div>
+<h3>Tabla de funciones</h3>
+<div class="table-scroll"><table><thead><tr><th>Función</th><th>Laravel</th><th>Spring Boot</th><th>Django REST</th><th>Express</th></tr></thead><tbody>
+<tr><td>Ruta y verbo</td><td>Route::post / apiResource</td><td>@PostMapping("/api/transacciones")</td><td>ViewSet + router (no visible en fragmento)</td><td>router.post('/transacciones')</td></tr>
+<tr><td>Autenticación</td><td>auth:sanctum</td><td>Principal; configuración Spring Security no visible</td><td>permission_classes = [IsAuthenticated]</td><td>middleware auth</td></tr>
+<tr><td>Validación</td><td>Form Request</td><td>@Valid @RequestBody</td><td>Serializer</td><td>validar(esquemaTransaccion)</td></tr>
+<tr><td>Propiedad del comercio / IDOR</td><td>$usuario->comercios()->findOrFail(...)</td><td>La comprobación vive en servicio (no visible)</td><td>get_object_or_404(... usuario=request.user)</td><td>where incluye usuarioId</td></tr>
+<tr><td>Respuesta 201 JSON</td><td>Resource + status 201</td><td>ResponseEntity.status(201).body(...)</td><td>serializer.save(); respuesta gestionada por DRF</td><td>res.status(201).json(...)</td></tr>
+</tbody></table></div>
+<h3>Preguntas de análisis — respuestas propuestas</h3>
+<ol>
+<li><b>¿Cuál delega más trabajo al framework?</b> Django REST Framework: el ViewSet, serializer y permission_classes concentran convenciones y automatizan operaciones comunes. La respuesta depende de la configuración que no aparece en el fragmento.</li>
+<li><b>¿Qué ocurre si Express elimina usuarioId?</b> Un usuario podría consultar un comercio ajeno usando su identificador. Aparece una vulnerabilidad IDOR/BOLA por falta de autorización a nivel de objeto.</li>
+<li><b>¿Dónde vive la lógica de negocio en Spring?</b> En TransaccionService, separado del controlador. El controlador coordina la petición y delega el registro.</li>
+</ol>
+</section>
+<section id="equivalencias" class="panel">
+<h2>2. Diccionario de equivalencias</h2>
+<p>Framework elegido para el diccionario: <b>Django + Django REST Framework</b>. DRF es un paquete adicional sobre Django.</p>
+<div class="table-scroll"><table><thead><tr><th>Concepto</th><th>Laravel</th><th>Django / DRF</th><th>Documentación oficial</th></tr></thead><tbody>
+<tr><td>Crear proyecto</td><td>composer create-project</td><td>django-admin startproject</td><td><a href="https://docs.djangoproject.com/en/stable/intro/tutorial01/">Django tutorial</a></td></tr>
+<tr><td>Rutas</td><td>routes/api.php</td><td>urls.py / path()</td><td><a href="https://docs.djangoproject.com/en/stable/topics/http/urls/">URL dispatcher</a></td></tr>
+<tr><td>Controlador</td><td>Controller</td><td>APIView / ViewSet (DRF)</td><td><a href="https://www.django-rest-framework.org/api-guide/views/">DRF Views</a></td></tr>
+<tr><td>ORM</td><td>Eloquent</td><td>Django ORM / Model</td><td><a href="https://docs.djangoproject.com/en/stable/topics/db/">Database</a></td></tr>
+<tr><td>Migraciones</td><td>php artisan migrate</td><td>python manage.py makemigrations / migrate</td><td><a href="https://docs.djangoproject.com/en/stable/topics/migrations/">Migrations</a></td></tr>
+<tr><td>Validación</td><td>Form Request</td><td>Serializer (DRF)</td><td><a href="https://www.django-rest-framework.org/api-guide/serializers/">Serializers</a></td></tr>
+<tr><td>Salida JSON</td><td>API Resource</td><td>Serializer + Response (DRF)</td><td><a href="https://www.django-rest-framework.org/api-guide/responses/">Responses</a></td></tr>
+<tr><td>Autenticación API</td><td>Sanctum</td><td>DRF Authentication (Session/Token; según configuración)</td><td><a href="https://www.django-rest-framework.org/api-guide/authentication/">Authentication</a></td></tr>
+<tr><td>Pruebas</td><td>PHPUnit + postJson</td><td>APITestCase / APIClient (DRF)</td><td><a href="https://www.django-rest-framework.org/api-guide/testing/">Testing</a></td></tr>
+<tr><td>Consola</td><td>artisan</td><td>manage.py</td><td><a href="https://docs.djangoproject.com/en/stable/ref/django-admin/">django-admin / manage.py</a></td></tr>
+</tbody></table></div>
+<p class="small">Las URL llevan a documentación oficial. Comprueba la versión estable usada por el curso antes de entregar.</p>
+</section>
+<section id="matriz" class="panel">
+<h2>3. Matriz de decisión ponderada</h2>
+<p><b>Contexto asumido:</b> proyecto académico web/API desarrollado por un equipo pequeño que ya ha trabajado con PHP y Laravel. Presupuesto limitado, plazo corto y necesidad de autenticación, validación y mantenimiento sencillo.</p>
+<p>Los criterios suman 100 %. Modifica los pesos y las calificaciones de 1 a 5 para adaptarlos a tu proyecto.</p>
+<div class="table-scroll"><table id="scoreTable"><thead><tr><th>Criterio</th><th>Peso %</th><th>Laravel</th><th>Spring Boot</th><th>Django</th><th>Express</th></tr></thead><tbody>
+<tr><td>Experiencia del equipo</td><td><input class="weight" type="number" value="25" min="0" max="100"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="2" type="number" min="1" max="5"></td><td><input class="score" value="2" type="number" min="1" max="5"></td><td><input class="score" value="3" type="number" min="1" max="5"></td></tr>
+<tr><td>Tiempo de desarrollo</td><td><input class="weight" type="number" value="20" min="0" max="100"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="2" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td><td><input class="score" value="3" type="number" min="1" max="5"></td></tr>
+<tr><td>Ecosistema API y autenticación</td><td><input class="weight" type="number" value="20" min="0" max="100"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td><td><input class="score" value="3" type="number" min="1" max="5"></td></tr>
+<tr><td>Costo de hosting</td><td><input class="weight" type="number" value="15" min="0" max="100"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="3" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td></tr>
+<tr><td>Rendimiento requerido</td><td><input class="weight" type="number" value="10" min="0" max="100"></td><td><input class="score" value="3" type="number" min="1" max="5"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="3" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td></tr>
+<tr><td>Comunidad y soporte</td><td><input class="weight" type="number" value="10" min="0" max="100"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="5" type="number" min="1" max="5"></td><td><input class="score" value="4" type="number" min="1" max="5"></td><td><input class="score" value="5" type="number" min="1" max="5"></td></tr>
+</tbody><tfoot><tr><th>Total / resultado</th><th id="weightTotal">100 %</th><th id="total0">4.80</th><th id="total1">3.35</th><th id="total2">3.40</th><th id="total3">3.45</th></tr></tfoot></table></div>
+<p id="matrixMessage" class="notice success" aria-live="polite">La suma de pesos es 100 %. Resultado calculado automáticamente.</p>
+<button id="resetMatrix" type="button">Restaurar valores del ejemplo</button>
+<p><b>Cálculo de Laravel:</b> (25×5 + 20×5 + 20×5 + 15×5 + 10×3 + 10×5) / 100 = 4.80.</p>
+</section>
+<section id="escenarios" class="panel">
+<h2>4. Escenarios nuevos</h2>
+<div class="scenario"><h3>Caso E · Sistema de citas para clínicas</h3><p><b>Elección propuesta:</b> ASP.NET Core. El equipo domina C# y el entorno ya utiliza Windows, Active Directory y nube Microsoft. Cambiaría si la institución exigiera un hosting no compatible o el equipo tuviera experiencia fuerte en otro stack.</p></div>
+<div class="scenario"><h3>Caso F · Portal educativo con panel editorial</h3><p><b>Elección propuesta:</b> Django + Django Admin. El equipo conoce Python y el panel administrativo acelera la publicación de contenidos. Cambiaría si la interfaz editorial necesitara flujos muy personalizados que hicieran más conveniente otra solución.</p></div>
+<div class="scenario"><h3>Caso G · Miles de sensores por segundo</h3><p><b>Elección propuesta:</b> Go para un servicio especializado de ingesta, por concurrencia y consumo contenido; también podría evaluarse Node.js según experiencia y pruebas de carga. Cambiaría según mediciones reales de memoria, latencia y volumen.</p></div>
+<div class="scenario"><h3>Caso H · Pago de impuestos municipales</h3><p><b>Elección propuesta:</b> Laravel. El desarrollador domina PHP, el hosting compartido reduce costos y el plazo de dos meses favorece reutilizar conocimientos y herramientas. Cambiaría si existiera una integración obligatoria con una plataforma incompatible.</p></div>
+</section>
+<section id="anexo" class="panel">
+<h2>5. Anexo A — Comparativo y conclusión</h2>
+<div class="table-scroll"><table><thead><tr><th>Criterio</th><th>Laravel</th><th>Django + DRF</th></tr></thead><tbody>
+<tr><td>Lenguaje y ecosistema</td><td>PHP; ecosistema Laravel, Composer y paquetes del framework.</td><td>Python; Django y paquete adicional Django REST Framework.</td></tr>
+<tr><td>Curva de aprendizaje</td><td>Conveniente cuando el equipo ya conoce PHP y Laravel.</td><td>Conveniente para equipos con experiencia en Python; requiere aprender convenciones Django/DRF.</td></tr>
+<tr><td>ORM y acceso a datos</td><td>Eloquent ORM, modelos y relaciones.</td><td>Django ORM, modelos y QuerySets.</td></tr>
+<tr><td>Autenticación API</td><td>Laravel Sanctum.</td><td>DRF Authentication; token o sesión según configuración.</td></tr>
+<tr><td>Herramientas de pruebas</td><td>PHPUnit/Pest y helpers HTTP como postJson.</td><td>APITestCase y APIClient.</td></tr>
+<tr><td>Despliegue y hosting</td><td>Amplia disponibilidad de hosting PHP; revisar requisitos de versión y extensiones.</td><td>Requiere hosting Python compatible y configuración del servidor de aplicaciones.</td></tr>
+<tr><td>Escenario donde conviene más</td><td>Equipo con experiencia PHP, entrega rápida y hosting PHP económico.</td><td>Equipo Python y aplicaciones que aprovechan Django Admin y el ecosistema Python.</td></tr>
+</tbody></table></div>
+<h3>Conclusión tecnológica</h3>
+<p>Para nuestro proyecto académico de gestión de transacciones elegimos Laravel porque el equipo ya cuenta con experiencia en PHP, permite desarrollar en un plazo corto y ofrece herramientas integradas para rutas, validación, ORM, autenticación y pruebas. Django con Django REST Framework sería preferible si el equipo dominara Python o necesitara aprovechar Django Admin para administrar contenido. En nuestro contexto, cambiar de tecnología aumentaría el tiempo de aprendizaje sin aportar una ventaja decisiva.</p>
+<p class="small">Personaliza el nombre y las características del proyecto real antes de entregar este anexo.</p>
+<button onclick="window.print()">Imprimir / Guardar como PDF</button>
+</section>
+<footer>Semana 17 · Proyecto académico demostrativo · UPED</footer>
+</main>
+<script src="assets/app.js"></script>
+</body></html>
